@@ -7,6 +7,6 @@ docker build -t project:latest .
 ```
 Run to startup docker container
 ```
-docker run -itp 8888:8888 -v /$(pwd):/home/joyvan/work project:latest
+docker run -itp 8888:8888 -v "/$(pwd)":/home/jovyan/work project:latest
 ```
 Then open link generated in terminal
