@@ -8,7 +8,7 @@ ENV PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
 
 USER root
 
-RUN apt-get update && apt-get install -y python3 python3-pip
+RUN apt-get update && apt-get install -y python3 python3-pip xxd
 RUN pip3 install ipython
 RUN pip3 install pyserial
-RUN pip3 install pandas tensorflow tensorflow_decision_forests
+RUN pip3 install numpy pandas tensorflow scikit-learn matplotlib
