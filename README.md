@@ -16,7 +16,10 @@ docker run -itp 8888:8888 -v "/$(pwd)":/home/jovyan/work project:latest
 ```
 Then open link generated in terminal
 
+### Preprocesssing Dataset
+We are taking the average of the motion data at every second and assigning corresponding sleep labels to each second.
+
 ### Tensorflow Model
-Running
+The model we are running is a simple NN with one hidden layer. 
 
 ### Buidling 

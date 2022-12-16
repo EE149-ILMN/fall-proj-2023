@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <vector>
 
 #include "model.h"
 
@@ -101,7 +102,14 @@ void loop() {
       printf("Invoke failed on x\n");
       return;
     }
-    int value = output->data.f[0];
+    float v0 = output->data.f[0];
+    float v1 = output->data.f[1];
+    float v2 = output->data.f[2];
+    float v3 = output->data.f[3];
+    float v4 = output->data.f[4];
+    float v5 = output->data.f[5];
+    std::vector<float> v = {v0, v1, v2, v3, v4, v5};
+    int pred = arg_max(v);
     printf("%f\n", value);
     delay(100);
 }
