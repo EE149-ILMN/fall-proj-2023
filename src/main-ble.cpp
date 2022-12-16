@@ -67,6 +67,34 @@ void print_accel();
 void setup() {
   Serial.begin(115200);
 
+  /* Bluetooth Setup */
+  BLEDevice::init("TwitchDetect");
+
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new ConnectionCallback());
+
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
+  pCharacteristic->setValue("TwitchDetect Init");
+  pCharacteristic->addDescriptor(new BLE2902());
+  pService->start();
+
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+
+  BLEDevice::startAdvertising();
+  Serial.println("Waiting a client connection to notify...");
+
     /* TF setup */
   tflite::InitializeTarget();
 
@@ -105,34 +133,6 @@ void setup() {
   input = interpreter->input(0);
   output = interpreter->output(0);
 
-  /* Bluetooth Setup */
-  BLEDevice::init("TwitchDetect");
-
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new ConnectionCallback());
-
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
-                    );
-  pCharacteristic->setValue("TwitchDetect Init");
-  pCharacteristic->addDescriptor(new BLE2902());
-  pService->start();
-
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);
-  pAdvertising->setMinPreferred(0x12);
-
-  BLEDevice::startAdvertising();
-  Serial.println("Waiting a client connection to notify...");
-
   /* Setup the accelerometer */
   x_sen = 0.3;
   y_sen = 0.3;
@@ -145,23 +145,24 @@ void setup() {
 
 void loop() {
     // Sample accel and run inference
-    read_accel();
-    scale_accel();
-    print_accel();
-    input->data.f[0] = x_accel;
-    input->data.f[1] = y_accel;
-    input->data.f[2] = z_accel;
-    TfLiteStatus invoke_status = interpreter->Invoke();
-    if (invoke_status != kTfLiteOk) {
-      printf("Invoke failed on x\n");
-      return;
-    }
-    int value = output->data.f[0];
-    printf("%f\n", value);
+    
     
     if (deviceConnected) {
-        Serial.printf("Sending value: %d\n", value);
-        pCharacteristic->setValue((uint8_t*)&value, 4);
+      read_accel();
+      scale_accel();
+      print_accel();
+      input->data.f[0] = x_accel;
+      input->data.f[1] = y_accel;
+      input->data.f[2] = z_accel;
+      TfLiteStatus invoke_status = interpreter->Invoke();
+      if (invoke_status != kTfLiteOk) {
+        printf("Invoke failed on x\n");
+        return;
+      }
+      float value = output->data.f[0];
+      printf("%f\n", value);
+        // Serial.printf("Sending value: %d\n", value);
+        pCharacteristic->setValue(value);
         pCharacteristic->notify();
         delay(3);
     }
