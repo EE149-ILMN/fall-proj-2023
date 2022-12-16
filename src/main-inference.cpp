@@ -40,19 +40,19 @@ void print_accel();
 void setup() {
     Serial.begin(115200);
 
-  /* TF setup */
-  tflite::InitializeTarget();
+    /* TF setup */
+    tflite::InitializeTarget();
 
-  // Map the model into a usable data structure. This doesn't involve any
-  // copying or parsing, it's a very lightweight operation.
-  model = tflite::GetModel(g_model);
-  if (model->version() != TFLITE_SCHEMA_VERSION) {
+    // Map the model into a usable data structure. This doesn't involve any
+    // copying or parsing, it's a very lightweight operation.
+    model = tflite::GetModel(g_model);
+    if (model->version() != TFLITE_SCHEMA_VERSION) {
     printf(
         "Model provided is schema version %d not equal "
         "to supported version %d.",
         model->version(), TFLITE_SCHEMA_VERSION);
     return;
-  }
+    }
 
     // This pulls in all the operation implementations we need.
     // NOLINTNEXTLINE(runtime-global-variables)
@@ -74,18 +74,18 @@ void setup() {
         return;
     }
 
-// //   Obtain pointers to the model's input and output tensors.
-  input = interpreter->input(0);
-  output = interpreter->output(0);
+    //   Obtain pointers to the model's input and output tensors.
+    input = interpreter->input(0);
+    output = interpreter->output(0);
 
-  /* Setup the accelerometer */
-  x_sen = 0.3;
-  y_sen = 0.3;
-  z_sen = 0.3;
+    /* Setup the accelerometer */
+    x_sen = 0.3;
+    y_sen = 0.3;
+    z_sen = 0.3;
 
-  x_bias = 1.5;
-  y_bias = 1.5;
-  z_bias = 1.5;
+    x_bias = 1.5;
+    y_bias = 1.5;
+    z_bias = 1.5;
 }
 
 void loop() {
@@ -107,16 +107,16 @@ void loop() {
 }
 
 void read_accel() {
-  x_raw = (float) analogRead(x_pin) / (float)1023;
-  y_raw = (float) analogRead(y_pin) / (float)1023;
-  z_raw = (float) analogRead(z_pin) / (float)1023; 
+    x_raw = (float) analogRead(x_pin) / (float)1023;
+    y_raw = (float) analogRead(y_pin) / (float)1023;
+    z_raw = (float) analogRead(z_pin) / (float)1023; 
 }
 
 void scale_accel() {
-  x_accel = (x_raw - x_bias) / x_sen;
-  y_accel = (y_raw - y_bias) / y_sen;
-  z_accel = (z_raw - z_bias) / z_sen;
+    x_accel = (x_raw - x_bias) / x_sen;
+    y_accel = (y_raw - y_bias) / y_sen;
+    z_accel = (z_raw - z_bias) / z_sen;
 }
 void print_accel(){
-  Serial.printf("x: %f y: %f z: %f \n", x_accel, y_accel, z_accel);
+    Serial.printf("x: %f y: %f z: %f \n", x_accel, y_accel, z_accel);
 }

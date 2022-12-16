@@ -5,29 +5,28 @@
 #include <BLE2902.h>
 #include <Arduino.h>
 
-#include "tflite-micro/lite/micro/all_ops_resolver.h"
-#include "tflite-micro/lite/micro/micro_error_reporter.h"
-#include "tflite-micro/lite/micro/micro_interpreter.h"
-#include "tflite-micro/lite/schema/schema_generated.h"
-#include "tflite-micro/lite/version.h"
+#include "model.h"
+
+#include <TensorFlowLite_ESP32.h>
+#include "tensorflow/lite/micro/all_ops_resolver.h"
+#include "tensorflow/lite/micro/micro_error_reporter.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/system_setup.h"
+#include "tensorflow/lite/schema/schema_generated.h"
 
 // Tensorflow
-// global variables used for TensorFlow Lite (Micro)
-tflite::MicroErrorReporter tflErrorReporter;
-// pull in all the TFLM ops, you can remove this line and
-// only pull in the TFLM ops you need, if would like to reduce
-// the compiled size of the sketch.
-tflite::AllOpsResolver tflOpsResolver;
+// Globals, used for compatibility with Arduino-style sketches.
+namespace {
+tflite::ErrorReporter* error_reporter = nullptr;
+const tflite::Model* model = nullptr;
+tflite::MicroInterpreter* interpreter = nullptr;
+TfLiteTensor* input = nullptr;
+TfLiteTensor* output = nullptr;
+int inference_count = 0;
 
-const tflite::Model* tflModel = nullptr;
-tflite::MicroInterpreter* tflInterpreter = nullptr;
-TfLiteTensor* tflInputTensor = nullptr;
-TfLiteTensor* tflOutputTensor = nullptr;
-
-// Create a static memory buffer for TFLM, the size may need to
-// be adjusted based on the model you are using
-constexpr int tensorArenaSize = 8 * 1024;
-byte tensorArena[tensorArenaSize] __attribute__((aligned(16)));
+constexpr int kTensorArenaSize = 1400;
+uint8_t tensor_arena[kTensorArenaSize];
+}  // namespace
 
 // BLuetooth
 BLEServer* pServer = NULL;
@@ -38,6 +37,18 @@ bool twitched = false;
 
 #define SERVICE_UUID        "deadbeef-beef-beef-beef-deadbeefbeef"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+class ConnectionCallback: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      Serial.println("CONNECTED!");
+      deviceConnected = true;
+    };
+
+    void onDisconnect(BLEServer* pServer) {
+      Serial.println("DISCONNECTED!");
+      deviceConnected = false;
+    }
+};
 
 // Accel
 const int x_pin = 13;
@@ -56,20 +67,43 @@ void print_accel();
 void setup() {
   Serial.begin(115200);
 
-  /* TF setup */
-  // get the TFL representation of the model byte array
-  tflModel = tflite::GetModel(model);
-  if (tflModel->version() != TFLITE_SCHEMA_VERSION) {
-    Serial.println("Model schema mismatch!");
-    while (1);
-  // Create an interpreter to run the model
-  tflInterpreter = new tflite::MicroInterpreter(tflModel, tflOpsResolver, tensorArena, tensorArenaSize, &tflErrorReporter);
-  // Allocate memory for the model's input and output tensors
-  tflInterpreter->AllocateTensors();
-  // Get pointers for the model's input and output tensors
-  tflInputTensor = tflInterpreter->input(0);
-  tflOutputTensor = tflInterpreter->output(0);
-}
+    /* TF setup */
+  tflite::InitializeTarget();
+
+  // Map the model into a usable data structure. This doesn't involve any
+  // copying or parsing, it's a very lightweight operation.
+  model = tflite::GetModel(g_model);
+  if (model->version() != TFLITE_SCHEMA_VERSION) {
+  printf(
+      "Model provided is schema version %d not equal "
+      "to supported version %d.",
+      model->version(), TFLITE_SCHEMA_VERSION);
+  return;
+  }
+
+  // This pulls in all the operation implementations we need.
+  // NOLINTNEXTLINE(runtime-global-variables)
+  static tflite::AllOpsResolver resolver;
+
+  static tflite::ErrorReporter *error_reporter;
+  static tflite::MicroErrorReporter micro_error;
+  error_reporter = &micro_error;
+
+  // Build an interpreter to run the model with.
+  static tflite::MicroInterpreter static_interpreter(
+      model, resolver, tensor_arena, kTensorArenaSize, error_reporter);
+  interpreter = &static_interpreter;
+
+  // Allocate memory from the tensor_arena for the model's tensors.
+  TfLiteStatus allocate_status = interpreter->AllocateTensors();
+  if (allocate_status != kTfLiteOk) {
+      printf("AllocateTensors() failed");
+      return;
+  }
+
+  //   Obtain pointers to the model's input and output tensors.
+  input = interpreter->input(0);
+  output = interpreter->output(0);
 
   /* Bluetooth Setup */
   BLEDevice::init("TwitchDetect");
@@ -98,7 +132,7 @@ void setup() {
 
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
-  
+
   /* Setup the accelerometer */
   x_sen = 0.3;
   y_sen = 0.3;
@@ -113,16 +147,17 @@ void loop() {
     // Sample accel and run inference
     read_accel();
     scale_accel();
-    tflInputTensor->data.f[0] = x_accel;
-    tflInputTensor->data.f[1] = y_accel;
-    tflInputTensor->data.f[2] = z_accel;
-    TfLiteStatus invokeStatus = tflInterpreter->Invoke();
-      if (invokeStatus != kTfLiteOk) {
-        Serial.println("Invoke failed!");
-        while (1);
-        return;
-      }
-    int value = tflOutputTensor.f[0];
+    print_accel();
+    input->data.f[0] = x_accel;
+    input->data.f[1] = y_accel;
+    input->data.f[2] = z_accel;
+    TfLiteStatus invoke_status = interpreter->Invoke();
+    if (invoke_status != kTfLiteOk) {
+      printf("Invoke failed on x\n");
+      return;
+    }
+    int value = output->data.f[0];
+    printf("%f\n", value);
     
     if (deviceConnected) {
         Serial.printf("Sending value: %d\n", value);
@@ -141,8 +176,6 @@ void loop() {
         // do stuff here on connecting
         oldDeviceConnected = deviceConnected;
     }
-
-    
     delay(100);
 }
 
@@ -160,15 +193,3 @@ void scale_accel() {
 void print_accel(){
   Serial.printf("x: %f y: %f z: %f \n", x_accel, y_accel, z_accel);
 }
-
-class ConnectionCallback: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-      Serial.println("CONNECTED!");
-      deviceConnected = true;
-    };
-
-    void onDisconnect(BLEServer* pServer) {
-      Serial.println("DISCONNECTED!");
-      deviceConnected = false;
-    }
-};
