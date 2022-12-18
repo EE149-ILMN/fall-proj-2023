@@ -89,6 +89,12 @@ void setup() {
     z_bias = 1.5;
 }
 
+// From jclay on Github
+template <typename T, typename A>
+int arg_max(std::vector<T, A> const& vec) {
+  return static_cast<int>(std::distance(vec.begin(), max_element(vec.begin(), vec.end())));
+}
+
 void loop() {
     // Sample accel and run inference
     read_accel();
@@ -110,7 +116,7 @@ void loop() {
     float v5 = output->data.f[5];
     std::vector<float> v = {v0, v1, v2, v3, v4, v5};
     int pred = arg_max(v);
-    printf("%f\n", value);
+    printf("%d\n", pred);
     delay(100);
 }
 

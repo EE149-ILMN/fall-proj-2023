@@ -143,14 +143,18 @@ void setup() {
   z_bias = 1.5;
 }
 
+// From jclay on Github
+template <typename T, typename A>
+int arg_max(std::vector<T, A> const& vec) {
+  return static_cast<int>(std::distance(vec.begin(), max_element(vec.begin(), vec.end())));
+}
+
 void loop() {
     // Sample accel and run inference
-    
-    
     if (deviceConnected) {
       read_accel();
       scale_accel();
-      print_accel();
+      // print_accel();
       input->data.f[0] = x_accel;
       input->data.f[1] = y_accel;
       input->data.f[2] = z_accel;
@@ -159,10 +163,16 @@ void loop() {
         printf("Invoke failed on x\n");
         return;
       }
-      float value = output->data.f[0];
-      printf("%f\n", value);
-        // Serial.printf("Sending value: %d\n", value);
-        pCharacteristic->setValue(value);
+      float v0 = output->data.f[0];
+      float v1 = output->data.f[1];
+      float v2 = output->data.f[2];
+      float v3 = output->data.f[3];
+      float v4 = output->data.f[4];
+      float v5 = output->data.f[5];
+      std::vector<float> v = {v0, v1, v2, v3, v4, v5};
+      int pred = arg_max(v);
+        Serial.printf("Sending value: %d\n", pred);
+        pCharacteristic->setValue(pred);
         pCharacteristic->notify();
         delay(3);
     }
